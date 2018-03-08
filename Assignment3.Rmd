@@ -1,0 +1,244 @@
+---
+title: "Assignment3"
+author: "RF"
+date: "3/6/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(pacman)
+p_load(rethinking)
+```
+
+```{r}
+getwd()
+locpath=getwd()
+setwd(locpath)
+```
+## Multivariate linear models
+
+In this assignment you will investigate the relation between different aspects of IQ and symptom severity in ASD (as measured by ADOS). The assignment is meant to make you practice on linear models, multiple predictors and interactions.
+
+The data you will use is the outcome of the psychological testing of the children you analyzed in methods 3.
+Data: https://www.dropbox.com/s/hom2qnmp9hyfwmu/Assignment3Data.csv?dl=0
+The data consists of ChildID, gender, age, diagnosis (ASD), symptom severity (ADOS), several aspects of IQ (NonVerbal/Perceptual,Verbal,Social) and the visit at which the tests were administered. The questions should be answered by focusing on visit 1.
+
+The questions you will have to answer are:
+
+1. Assess the relation between symptom severity and IQ (all three IQs separately)(focus on visit 1 and children with ASD) and report the model (how did you build it, which priors, data story), a plot of the model, a couple of lines describing the quality of the model and interpreting the results (discussed in lecture). P.S. Should you scale? P.P.S. Don't forget to motivate your priors. P.P.P.S. At least one plot for results and a plot for quality of each model (here and in the next questions) would be appreciated.
+1.1. Verbal IQ and ADOS
+1.2. Non Verbal IQ and ADOS
+1.3. Social IQ and ADOS
+
+2. Do the different aspects of IQ account for different portions of the variance in ADOS? 
+2.1. Does it make sense to have all IQ measures in the same model? First write a few lines answering the question and motivating your answer, including a discussion as to what happens when you put all of them in the same model. Then build a model following your answer. If your answer is "no", you are not free, you still have to answer: are there alternative ways of answering the question?
+2.2. Build the model, assess its quality, write a few lines interpreting the results.
+
+3. Let's now include also the TD children. Does it make sense to ask whether IQ and ADOS are related? Motivate your answer. In any case, if you wanted to build a model to answer that question, which model would you build? Run the model, assess its quality, write a few lines interpreting the results.
+
+4. Let's discuss contents:
+4.1. You have three scores for IQ, do they show shared variance? Is that the same in TD and ASD? What does that tell us about IQ?
+4.2. You have explored the relation between IQ and ADOS. How do you explain that relation from a cognitive perspective? N.B. You can present alternative hypotheses.
+
+5. Bonus questions: Including measurement errors. 
+5.1. Let's assume that ADOS has a measurement error of 1. How would you model that in any of the previous models? 
+5.2. We know that IQ has an estimated measurement error of 2.12. How would you include that? 
+
+```{r}
+d = read.csv("Assignment3Data.csv")
+```
+
+
+```{r}
+d2 = d[d$Visit == 1, ]
+d2 = d2[d2$ASD == 1, ]
+d2 = d2[complete.cases(d2),]
+```
+
+```{r}
+#plot to check if they covary
+plot(d2$VerbalIQ ~ d2$ADOS, data = d2)
+
+#Providing starting values for MAP
+start = list(
+  mu = mean(d2$VerbalIQ),
+  sigma = sd(d2$VerbalIQ)
+)
+
+#checking the max value of VerbalIQ
+max(d2$VerbalIQ)
+
+m1 = map(
+  alist(
+    VerbalIQ ~ dnorm(mu, sigma),
+    mu <- a + b*ADOS,
+    a ~ dnorm(18, 10), #based on the start values. prior of 18 because it is the mean of VerbalIQ. SD of verbalIQ is 7.6, and we leave a bit more space for it to deviate by putting 10 as SD here.
+    b ~ dnorm(0, 5), #conservative prior of 0 (we don't know what to expect), but with SD of 5 - this is more agnostic
+    sigma ~ dunif(0, 33) #measure of error. determined from the range (0-33) of VerbalIQ
+    ),
+data = d2)
+
+#table of estimates
+precis(m1, corr = TRUE)
+
+#superimpose MAP values for mean vIQ over the actual data:
+plot(VerbalIQ ~ ADOS, data = d2)
+abline(a = coef(m1) ["a"], b = coef(m1) ["b"])
+
+#Extracting some samples from the model to show uncertainty
+  post <- extract.samples(m1)
+  post[1:5,] #inspecting first 5 rows
+  
+  #Adding the lines
+  #extracting all 34 cases in d2
+  N <- 34
+  dN <- d2[1:N, ]
+  mN <- map(
+    alist(
+      VerbalIQ ~ dnorm(mu, sigma),
+      mu <- a+b*ADOS,
+      a ~ dnorm(18, 10),
+      b ~ dnorm(0, 5),
+      sigma ~ dunif(0, 33)
+    ), data=dN)
+
+#Plotting 20 of these lines
+  #extract 20 samples from the posterior
+  post <- extract.samples(mN, n=20)
+
+  #display raw data and sample size
+  plot(dN$ADOS, dN$VerbalIQ,
+       xlim=range(d2$ADOS), ylim=range(d2$VerbalIQ),
+       col=rangi2, xlab="ADOS", ylab="Verbal IQ")
+  mtext(concat("N = ", N))
+  
+  #plot the lines, with transparency
+  for(i in 1:20)
+    abline(a=post$a[i], b=post$b[i], col=col.alpha("black", 0.3)) #loops over all 20 lines, using abline to display each
+
+#____________________________________________________#
+#Contour instead of lines
+  
+  mu <- link(m1) #link takes the map model fit, samples from the posterior distribution, and computes mean for each case in the data abd sample from the posterior distribution.
+  str(mu)
+  #We want a distribution of mean for each unique weight value on the horizontal axis:
+      #define sequence of weights to compute predictions for. these values will be on the horizontal axis.
+      ADOS.seq <- seq(from=-5, to=25, by=1)
+      
+      #use link to compute mu for each sample in the posterior and for each weight in the weight.seq
+      mu <- link(m1, data=data.frame(ADOS=ADOS.seq))
+      str(mu)
+
+    #Summarising the distribution for each weight value
+    #summarise the distribution of mu
+    mu.mean <- apply(mu, 2, mean) #compute the mean of each column (dimension "2") of the matrix mu.
+    mu.HPDI <- apply(mu, 2, HPDI, prob=0.89)
+    
+#--Prediction intervals--
+  #Generating a 89% prediction interval for actual heights, not just the average height (mean); incorporating SD and its uncertainty.
+  sim.ADOS <- sim(m1, data=list(ADOS=ADOS.seq))
+  str(sim.ADOS) #Matrix that contains simulated heights, not distributions of plausible average height as earlier.
+  
+  #Summarising them by using apply
+  ADOS.PI <- apply(sim.ADOS, 2, PI, prob=0.89)
+
+
+    #plot raw data
+    plot(VerbalIQ ~ ADOS, d2, col=col.alpha(rangi2, 0.5))
+    
+    #draw MAP line
+    lines(ADOS.seq, mu.mean)
+    
+    #draw HPDI region for line
+    shade(mu.HPDI, ADOS.seq)
+    
+    #draw PI region for simulated heights
+    shade(ADOS.PI, ADOS.seq)
+```
+
+
+
+#Assess the relation between symptom severity and IQ and report the model 
+#(how did you build it, which priors, data story):
+
+We built a model using MAP and alist, with vIQ as the outcome with a normal distribution, and ADOS as the predictor with a normal distribution.
+
+From the table we can tell that for every increase in ADOS score, vIQ drops with 1.1, and that 89% of the posterior probability lies between -1.4 and -0.8, which suggests that beta values well below -1.4 and above -0.8 are highly incompatible with these data and this model. Furthermore, we notice from the table that an ASD child with an ADOS score of 0 has a vIQ of 33, and that 95% of plausible vIQs lie within 10 vIQ scores (2 sigmas) of the mean vIQ.
+
+From the variance-covariance matrix we see that the two parameters alpha and beta are almost negatively correlated, meaning they carry almost the same information. We assess that this is not a problem in this simple model (in more complex models we can use centering to adress the problem).
+
+We interpret all this as there being a negative relationship between symptom severity and verbal IQ in ASD children, meaning that children with higher scores in ADOS show lower scores in verbal IQ.
+
+a plot of the model and a couple of lines describing the quality of the model:
+We produced four plots: One of the data, one of the data and the model, one of the data and the model with uncertainty, and lastly one of the data with shaded regions of uncertainty, respectively. From the third plot, it can be seen that there is greater uncertainty at extreme measures of ADOS, e.g. ADOS = 0. From the last plot we visualize the data and model as follows: The line is the MAP estimate of the mean vIQ at each ADOS value. The narrow shaded interval is the distribution of mu (a + b*ADOS). The wider shaded region represents the region within which the model expects to find 89% of actual vIQs in the group of ASD children at each ADOS value. The shaded regions are very wide, which shows that there is a lot of uncertainty, consequently affecting the quality of the model. This is probably due to low sample size (only 34 participants in visit 1 with ASD).
+
+
+#P.S. Should you scale? 
+We have chosen not to scale (standardize) our data so that we are able to interpret the data on a natural scale.
+
+
+#P.P.S. Don't forget to motivate your priors. 
+
+For alpha we chose a prior of 18 because it is the mean of VerbalIQ. SD of verbalIQ is 7.6, and we leave a bit more space for it to deviate by putting 10 as SD here.
+For beta we chose a conservative prior of 0 because we don't know what to expect, but with a SD of 5 as this is more agnostic.
+For sigma, which has a uniform distribution, we chose the range 0-33, as that is the range of possible scores of verbal IQ
+
+
+
+
+
+
+
+
+#Notes to self:
+height ~ weight
+b = 0.9
+1 up in weight, the beta value increases -> 1 extra kilo means 0.9 cm taller
+
+vIQ ~ ADOS
+b = -1.1
+1 up in ADOS, the beta value decreases -> 1 extra value of ADOS means 1.1 less vIQ = the worse the symptom severity, the lower vIQ
+
+89% of the posterior probability lies between -1.4 and -0.8 = suggests that beta values well below -1.4 and above -0.8 are highly incompatible with these data and this model
+
+mean of alpha indicates that a person of ADOS 0 should have a vIQ of 33
+
+mean of sigma indicates the width of the distribution of vIQ around the mean. 95% of plausible vIQs lie within 10 vIQ scores (2 sigmas) of the mean vIQ.
+
+from the variance-covariance matrix we see that the two parameters alpha and beta are almost negatively correlated -> they carry almost the same information. not a problem in this simple mode (in more complex models we can use centering to adress the problem).
+
+plot:
+multiple regression lines sampled from the posterior. it can be seen that there is greater uncertainty at extreme measures of ADOS, e.g. ADOS = 0
+
+
+W
+
+Variable of interest: Verbal IQ and whether it is influences by ADOS. Verbal IQ has a Gaussian distribution.
+
+based on the start values. prior of 18 because it is the mean of VerbalIQ. SD of verbalIQ is 7.6, and we leave a bit more space for it to deviate by putting 10 as SD here.
+    b ~ dnorm(0, 5), #conservative prior of 0 (we don't know what to expect), but with SD of 5 - this is more agnostic
+    sigma ~ dunif(0, 33) #measure of error. determined from the range (0-33) of VerbalIQ
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
