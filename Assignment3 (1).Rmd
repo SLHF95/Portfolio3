@@ -436,31 +436,8 @@ pairs( ~ NonVerbalIQ + VerbalIQ + SocialIQ ,
 # the pairs plot show the variance shared by variables (not entirely sure)
 # along the diagonal, the variables are labeled. In each scatterplot off the diagonal, the vartical axis variable is the variable labeled in the same column e.g. the two scatterplots in the first row are NonVerbalIQ (vertical) against VerbalIQ (horizontal), and then NonVerbalIQ (vertical) against SocialIQ (horizontal)
 # In this plot - if the scatter form a pretty diagonal straight line, it is because the two variables are so correlated (negatively or positively) to such a degree that they are nearly redundant - this means that either of them helps predicting the last variable, but neither helps much once you already know the other. 
-# we can also compute the correlation betweent them with cor:
-# correlation between VerbalIQ and NonVerbalIQ
-cor(d2$VerbalIQ , d2$NonVerbalIQ)
-# correlation between VerbalIQ and SocialIQ
-cor(d2$VerbalIQ , d2$SocialIQ)
-# correlation between NonVerbalIQ and SocialIQ
-cor(d2$NonVerbalIQ , d2$SocialIQ)
-# how the variables correlate 
+# we can also compute the correlation betweent them with cor()
 
-# V~nV = 0.67
-# V~S = 0.61
-# nV~S = 0.37
-
-# model with 
-model <- map(
-    alist(
-        VerbalIQ ~ dnorm( mu , sigma ) ,
-        mu <- a + bN*NonVerbalIQ,
-        a ~ dnorm(18, 10) ,
-        bN ~ dnorm(27, 10) ,
-        sigma ~ dunif( 0 , 33 )
-),
-    data = d2 )
-precis( model )
-precis_plot(precis(model))
 
 ```
 
@@ -495,7 +472,8 @@ cor(d2$VerbalIQ , d2$SocialIQ)
 cor(d2$NonVerbalIQ , d2$SocialIQ)
 # how the variables correlate 
 ```
-v~nV = 67
+
+v~nV = 0.67
 V~S = 0.6
 nV~S = 0.37
 
@@ -607,7 +585,7 @@ Attempt to make model with Diagnosis as beta:
 #         a ~ dnorm( -1.07e-16 , 1 ) , #we put mean at ~0, which we can see on the precis plot, where a is right at 0 (because we have standardized the data)
 #         bN ~ dnorm(2.66e-16, 1) , 
 #         bS ~ dnorm(-1.36e-16, 1) ,
-#         bD ~ dbinom()
+#         bD ~ dbinom() #??
 #         sigma ~ dunif( 0 , 1.54 ) #the 89% uncertainty. HAS to be positive
 # ),
 #     data = d1_s )
