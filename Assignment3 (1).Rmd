@@ -47,6 +47,7 @@ QUESTION 1: Assessing the relation between symptom severity (ADOS) and IQ (verba
 #plot to check if they covary
 plot(VerbalIQ ~ ADOS, data = d2)
 
+
 #Providing starting values for MAP
 start = list(
   mu = mean(d2$VerbalIQ),
